@@ -17,7 +17,8 @@ def extract_tables_from_pdf(pdf_path):
         return pd.DataFrame()
 
 def make_columns_unique(df):
-    cols = pd.Series(df.columns)
+    # Strip whitespace and replace empty column names with 'column'
+    cols = pd.Series([str(c).strip() if c and str(c).strip() != '' else "column" for c in df.columns])
     for dup in cols[cols.duplicated()].unique():
         dup_idx = cols[cols == dup].index
         for i, idx in enumerate(dup_idx[1:], 1):
