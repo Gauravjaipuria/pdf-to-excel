@@ -1,61 +1,41 @@
 import streamlit as st
-import pdfplumber
+import pytesseract
+from PIL import Image
 import pandas as pd
 import io
 
-def extract_tables_from_pdf(pdf_path):
-    all_data = []
-    with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            tables = page.extract_tables()
-            for table in tables:
-                df = pd.DataFrame(table[1:], columns=table[0])
-                all_data.append(df)
-    if all_data:
-        return pd.concat(all_data, ignore_index=True)
-    else:
-        return pd.DataFrame()
+# OCR function
+def extract_text_from_image(image_file):
+    img = Image.open(image_file)
+    text = pytesseract.image_to_string(img)
+    return text
 
-def make_columns_unique(df):
-    # Strip whitespace and replace empty column names with 'column'
-    cols = pd.Series([str(c).strip() if c and str(c).strip() != '' else "column" for c in df.columns])
-    for dup in cols[cols.duplicated()].unique():
-        dup_idx = cols[cols == dup].index
-        for i, idx in enumerate(dup_idx[1:], 1):
-            cols[idx] = f"{dup}_{i}"
-    df.columns = cols
-    return df
+def extract_table_from_text(text):
+    # Custom logic to extract only the table section
+    lines = text.split('\n')
+    table_lines = []
+    start = False
+    for line in lines:
+        if 'Product description' in line or 'Gross Product Price' in line:
+            start = True
+        if start:
+            table_lines.append(line)
+            if 'Total Qty Purchased' in line:
+                break
+    return table_lines
 
-st.title("PDF Invoice to Excel Converter")
+st.title("Invoice Image to Table & Excel")
 
-uploaded_file = st.file_uploader("Upload your PDF invoice file", type=["pdf"])
-
+uploaded_file = st.file_uploader("Upload invoice image", type=["jpg", "png", "jpeg"])
 if uploaded_file:
-    with open("temp_invoice.pdf", "wb") as f:
-        f.write(uploaded_file.getbuffer())
-
-    st.write("Extracting tables from PDF...")
-    extracted_df = extract_tables_from_pdf("temp_invoice.pdf")
-
-    if not extracted_df.empty:
-        extracted_df = make_columns_unique(extracted_df)
-
-        st.write("Extracted Data Preview (you can select and copy this data):")
-        st.dataframe(extracted_df)
-
-        st.text("Raw data (tab separated) for easy copy-paste:")
-        st.text(extracted_df.to_csv(sep='\t', index=False))
-
-        towrite = io.BytesIO()
-        with pd.ExcelWriter(towrite, engine='openpyxl') as writer:
-            extracted_df.to_excel(writer, index=False)
-        towrite.seek(0)
-
-        st.download_button(
-            label="Download Extracted Excel",
-            data=towrite,
-            file_name="Invoices_Extracted.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+    text = extract_text_from_image(uploaded_file)
+    st.text_area("Extracted Text", text, height=300)
+    
+    table_lines = extract_table_from_text(text)
+    if table_lines:
+        st.write("Item Table:")
+        for line in table_lines:
+            st.write(line)
+        # (Parse lines into DataFrame for better copy/download)
     else:
-        st.write("No tables found in the PDF.")
+        st.write("No item table found.")
