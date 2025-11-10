@@ -1,6 +1,7 @@
 import streamlit as st
 import pdfplumber
 import pandas as pd
+import io
 
 def extract_tables_from_pdf(pdf_path):
     all_data = []
@@ -27,12 +28,14 @@ if uploaded_file:
     extracted_df = extract_tables_from_pdf("temp_invoice.pdf")
 
     if not extracted_df.empty:
-        st.write("Extracted Data Preview:")
+        st.write("Extracted Data Preview (you can select and copy this data):")
         st.dataframe(extracted_df)
 
-        excel_bytes = extracted_df.to_excel(index=False, engine='openpyxl')
-        # Save to bytes for download instead of file system
-        import io
+        # Display data as text to allow easy copy-paste
+        st.text("Raw data (tab separated) for easy copy-paste:")
+        st.text(extracted_df.to_csv(sep='\t', index=False))
+
+        # Prepare Excel file in memory for download
         towrite = io.BytesIO()
         with pd.ExcelWriter(towrite, engine='openpyxl') as writer:
             extracted_df.to_excel(writer, index=False)
@@ -44,5 +47,6 @@ if uploaded_file:
             file_name="Invoices_Extracted.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
     else:
         st.write("No tables found in the PDF.")
